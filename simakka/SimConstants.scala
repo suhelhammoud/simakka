@@ -11,6 +11,7 @@ import akka.actor.ActorRef
 trait SimConstants {
   //Messges used by the system have ids lower than LIMIT, user customized messages ids starts counting from LIMIT
   val LIMIT= 1000;
+  val LOCALHOST = -1;
 
   val ACTOR_NOT_FOUND = null; //TODO: importiant change type later
 
@@ -49,7 +50,9 @@ trait SimConstants {
     * @param from Source SimEntity id
     * @param to Destination SimEntity id
     */
-  case class AddLink(from: Int, to: Int)
+  case class AddLinkFrom(from: Int, to: Int)
+
+  case class AddLinkTo(from: Int, to: Int)
 
 
   case class AddRef(name: String, id: Int, actorRef: ActorRef)
@@ -58,6 +61,7 @@ trait SimConstants {
 
   /**
     * For asking different SimEntity to dynamically change its lookahead value
+    *
     * @param time simulation moment of change
     * @param value new value of lookahead
     */

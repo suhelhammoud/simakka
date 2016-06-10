@@ -5,61 +5,84 @@ package simakka
   */
 class SimChannels {
 
+  final val LocalChannelID = -1;
 
-  var headTime = 0.0
+  var localChannelTime = 0.0
 
-  /** true of any of the channels where empty**/
-  var anyEmpty = true;
+  var numEmptyChannels = 0
+
+  def getNumEmptyChannels = numEmptyChannels
+
 
   /*Hold input channels as
   * key: id of SimEntity who is sending events to this instance
   * value: corresponding SimChannel*/
   val channelMap = scala.collection.mutable.Map[Int, SimChannel]()
 
-  def clock = headTime
+  val localEventsQueue = scala.collection.mutable.PriorityQueue[SimEv]()(new Ordering[SimEv] {
+    override def compare(x: SimEv, y: SimEv): Int = Math.signum(y.time - x.time).toInt
+  })
 
-  def containsEmpty = anyEmpty
+  def clock = localChannelTime
+
+  /** true of any of the channels where empty **/
+  def containsEmpty = numEmptyChannels > 0;
 
   /**
     * @param from: id of source SimEntity
     */
   def addLink(from: Int): Unit = {
+    assert(!channelMap.contains(from))
     channelMap.put(from, new SimChannel())
+    numEmptyChannels += 1
   }
 
 
   def addNullMessage(nm: NullMessage): Unit = {
     assert(channelMap contains (nm.from))
     val channel = channelMap.get(nm.from).get
+    if (channel.empty) numEmptyChannels -= 1
     channel.addNullMessage(nm)
   }
 
 
   def addEvent(ev: SimEv): Unit = {
-    assert(channelMap contains (ev.from))
-    val channel = channelMap.get(ev.from).get
-    channel.addEvent(ev)
-    anyEmpty = false;
+    if (ev.from == ev.to)
+      localEventsQueue.enqueue(ev)
+    else {
+      assert(channelMap contains (ev.from))
+      val channel = channelMap.get(ev.from).get
+      if (channel.empty) numEmptyChannels -= 1
+      channel.addEvent(ev)
+    }
   }
 
   /**
     * Find the next event of the smallest time stamp in all input channels
-    * @return
-    */
-  def nextEvent = {
-    val (channelKey, channelValue) = channelMap.minBy(_._2.nextLowestTime)
-    channelValue.dequeue
-  }
-
-  /**
     *
     * @return
     */
-  def canAdvance = channelMap.values.forall(_.canAdvance)
+  def nextEvent(): (Int, SimEvent) = {
+    val (minId, minEvent) = channelMap.mapValues(_.front).minBy(_._2.time)
+
+    val minLocalEvent = if (localEventsQueue.isEmpty) SimEvNone else localEventsQueue.head
+
+    if (minLocalEvent.time < minEvent.time)
+      (LocalChannelID, localEventsQueue.dequeue())
+    else {
+      val minChannel = channelMap.get(minId).get
+      minChannel.getNextEvent() //TODO
+      if (minChannel.empty) numEmptyChannels += 1
+      (minId, minEvent)
+    }
+  }
+
+  def canAdvance = numEmptyChannels == 0
+
 
   override def toString() = {
-    val headTimes = for {i <- channelMap} yield (i._1, i._2.front, i._2.isEmpty)
-    s"headTime = $headTime, queue = ${headTimes.mkString("\n")}"
+    val headTimes = for {i <- channelMap} yield (i._1, i._2.front, i._2.empty)
+    s"headTime = $localChannelTime, queue = ${headTimes.mkString("\n")}"
   }
 
 

@@ -23,7 +23,7 @@ class SimSystem  extends Actor with SimConstants with ActorLogging{
     if(toEntity == None || fromEntity == None){
       log.error(s"Either entity $from or $to is not available in entities yet")
     }else{
-      toEntity.get ! AddLink(from, to)
+      toEntity.get ! AddLinkFrom(from, to)
     }
   }
 
@@ -48,7 +48,7 @@ class SimSystem  extends Actor with SimConstants with ActorLogging{
 
     case QueryID(id) => queryID(id)
 
-    case AddLink(from, to) => addLink(from, to)
+    case AddLinkFrom(from, to) => addLink(from, to)
 
     case _ => log.info("Not recognized message")
 
