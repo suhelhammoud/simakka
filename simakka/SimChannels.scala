@@ -25,7 +25,7 @@ class SimChannels {
 
   def clock = localChannelTime
 
-  /** true of any of the channels where empty **/
+  /** true of any of the channels were empty **/
   def containsEmpty = numEmptyChannels > 0;
 
   /**
