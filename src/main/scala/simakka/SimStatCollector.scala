@@ -1,23 +1,22 @@
 package simakka
 
 import java.io.{FileWriter, PrintWriter}
+
 import akka.actor.{Actor, ActorLogging, ActorSystem, PoisonPill, Props}
 
 /**
   * Created by Suhel on 6/2/16.
+  *
+  * @param fileName filename to be created to save in all stats measures
   */
-/**
-  * Provid
-  * @param fileName filename to be created to save all stats measures at
-  */
-class SimStatCollector(val fileName: String) extends Actor with SimConstants with ActorLogging{
+class SimStatCollector(val fileName: String) extends Actor with SimConstants with ActorLogging {
 
   val pw = new PrintWriter(new FileWriter(fileName))
   pw.println(StatValueM.header)
 
   override def receive: Receive = {
 
-    case sm: StatValueM =>  pw.println(sm.csvFormat)
+    case sm: StatValueM => pw.println(sm.csvFormat)
 
     case CloseStatCollector => pw.close();
 
@@ -25,14 +24,14 @@ class SimStatCollector(val fileName: String) extends Actor with SimConstants wit
       pw.close()
       self ! PoisonPill
 
-    case _ => log.info( "Unknown message" )
+    case _ => log.info("Unknown message")
   }
 }
 
 object SimStatCollectorTest extends SimConstants {
 
   def main(args: Array[String]) {
-
+    //experimental test
     println("SimStatCollector Test")
 
     val system = ActorSystem("SimAkka")
@@ -40,7 +39,7 @@ object SimStatCollectorTest extends SimConstants {
 
     val rnd = scala.util.Random
 
-    for (i <- 1 to 200){
+    for (i <- 1 to 200) {
       val sm = StatValueM(s"eName${rnd.nextInt(10)}", s"statName${rnd.nextInt(10)}",
         rnd.nextInt(100), rnd.nextDouble(), rnd.nextDouble(), rnd.nextDouble())
       println(s"going to send $sm")

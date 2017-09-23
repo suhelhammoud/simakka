@@ -4,8 +4,6 @@ package simakka
 /**
   * Created by Suhel on 6/2/16.
   */
-
-
 trait SimStat {
   val STAT_RATE = 0;
   val STAT_INTERVAL = 1;
@@ -13,7 +11,6 @@ trait SimStat {
   val STAT_USER = 3;
 
   var simTime: Double
-
 
   val stats = collection.mutable.Map[String, StatValue]()
 
@@ -62,8 +59,6 @@ trait SimStat {
   }
 
   def getStats = stats
-
-
 }
 
 /**
@@ -77,21 +72,20 @@ trait SimStat {
   * @param lastTime
   */
 case class StatValueM(val entityName: String, val statName: String,
-                      val statType: Int, val value: Double, val accum: Double, val lastTime: Double){
-
+                      val statType: Int, val value: Double, val accum: Double, val lastTime: Double) {
   def csvFormat = s"$entityName, $statName, $statType, $value, $accum, $lastTime"
 }
 
 /**
   * For providing static header function
   */
-object StatValueM{
+object StatValueM {
   def header = List("entityName", "statName", "statType", "value", "accum", "lastTime").mkString(", ")
 }
 
-
 /**
   * Basic unit to store one measure
+  *
   * @param statType
   * @param value
   * @param accum
@@ -101,7 +95,7 @@ class StatValue(val statType: Int, var value: Double, var accum: Double,
                 var lastTime: Double) {
 
   def toStatValueM(entityName: String, statName: String) =
-    StatValueM(entityName, statName,statType, value, accum, lastTime)
+    StatValueM(entityName, statName, statType, value, accum, lastTime)
 
   override def toString = {
     s"StateValue(statTyple:$statType, value:$value, accum:$accum, lastTime:$lastTime)"
@@ -116,9 +110,11 @@ object StatValue {
   def apply(statTyple: Int, value: Double, accum: Double, lastTime: Double) =
     new StatValue(statTyple, value, accum, lastTime)
 
-  def testStatValue(): Unit ={
+  def testStatValue(): Unit = {
     /** dummy class used instead of SimEntity to test statValue */
-    class TestStat extends SimStat {   var simTime = 0.0 }
+    class TestStat extends SimStat {
+      var simTime = 0.0
+    }
 
     val ts = new TestStat()
 

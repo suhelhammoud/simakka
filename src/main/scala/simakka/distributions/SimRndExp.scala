@@ -5,7 +5,8 @@ import scala.util.Random
 /**
   * Created by Suhel on 6/10/16.
   */
-class SimRndExp(val name: String, mean: Double) extends SimRndContinuousGenerator {
+class SimRndExp(val name: String, val mean: Double)
+  extends SimRndContinuousGenerator {
 
   val rnd = Random
 
@@ -40,7 +41,15 @@ class SimRndExp(val name: String, mean: Double) extends SimRndContinuousGenerato
     *
     * @return The generator's seed
     */
-  override def getSeed(): Unit = seed
+  override def getSeed() = seed
 
   override var seed: Long = 445454545L
+}
+
+object SimRndExp{
+  def apply(name: String, mean: Double): SimRndExp = new SimRndExp( name, mean)
+
+  def main(args: Array[String]) {
+    new SimRndExp("suhel", 5.6)
+  }
 }

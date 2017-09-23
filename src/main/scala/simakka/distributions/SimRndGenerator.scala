@@ -21,7 +21,7 @@ trait SimRndGenerator {
     *
     * @return The generator's seed
     */
-  def getSeed()
+  def getSeed(): Long
 
   /**
     * Get the random number generator's name.

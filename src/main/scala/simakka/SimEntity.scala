@@ -1,13 +1,10 @@
 package simakka
 
-import java.util.concurrent.TimeUnit
-
-import akka.actor.{Actor, ActorLogging, ActorRef}
-import akka.pattern.ask
+import akka.actor.{Actor, ActorLogging}
+import akka.event.LoggingReceive
 import akka.util.Timeout
 
-import scala.concurrent.Await
-import scala.concurrent.duration.{Duration, _}
+import scala.concurrent.duration._
 
 /**
   * Created by Suhel on 6/2/16.
@@ -19,89 +16,29 @@ import scala.concurrent.duration.{Duration, _}
   * @param localID Mandatory unique id for each of SimEntity actor
   *                //  * @param parent  ActorRef of parent actor (SimSystem)
   */
-//class SimEntity(val name: String, val localID: Int, val parent: ActorRef)
 abstract class SimEntity(val name: String, val localID: Int)
-  extends Actor with SimConstants with SimStat with ActorLogging {
+  extends Actor with SimConstants with SimStat with ActorLogging with SimEntityLookup {
+  /* Used to indicate the id of LocalEventQueue*/
+  final val LocalChannelID = -1;
 
-  /*Used as timeout of synchronous calls*/
-  implicit val timeout = Timeout(5 seconds)
+  /*Used as timeout for synchronous calls*/
+  implicit val timeout = Timeout(50 seconds)
 
-  /*SimEntity id: Int -> SimEntity Actor : ActorRef*/
-  val entities = scala.collection.mutable.HashMap[Int, ActorRef]()
 
-  /*SimEntity name: String -> SimEntity id: Int*/
-  val entitiesNames = scala.collection.mutable.HashMap[String, Int]()
+  /* Input channels */
+  val simInChannels = new SimInChannels()
 
-  /*Input channels*/
-  val simChannels = new SimChannels()
-
-  /*One separate channel for local events */
-  val localChannel = new SimChannel()
-
-  val localEvents = new scala.collection.mutable.Queue[SimEv]
+  /* One more separate input channel for local events */
+  val localEventQueue = PriorityEventQueue.newInstance()
 
   //  val simOutChannels = new scala.collection.mutable.Queue[SimEvent]
   val simOutChannels = new SimOutChannels;
 
   var simTime = 0.0;
+  var lastEventTime = 0.0
 
   var lookahead = 0.0;
 
-  private var tmpLocalEvents = collection.mutable.ArrayBuffer.empty[SimEv]
-
-  private var tmpOutEvnets = collection.mutable.ArrayBuffer.empty[SimEv]
-
-  /**
-    * Get the actorRef any SimEntity by its name
-    * If name of SimEntity is not saved in local map then get it from the SimSystem and save it locally for future calls
-    *
-    * @param name
-    * @return ActorRef option value (None means not found)
-    */
-  def getRef(name: String): Option[ActorRef] = {
-    val actorID = entitiesNames.get(name)
-    if (actorID == None) {
-      log.debug("getRef({})", name)
-      val qnr = Await.result(context.parent ? QueryName(name), Duration(5, TimeUnit.SECONDS))
-        .asInstanceOf[QueryIDResponse]
-      if (qnr.actorRef == None) {
-        log.error("SimEntity with name {} does not exist!", name)
-        return None
-      } else {
-        entitiesNames.put(name, qnr.id)
-        entities.put(qnr.id, qnr.actorRef.get)
-        return qnr.actorRef
-      }
-
-    } else {
-      val actorRef = entities.get(actorID.get)
-      return actorRef
-    }
-  }
-
-  /**
-    * Get the ActorRef of any entity by its id, ask the parent actor if not found locally, cache it for future calls
-    *
-    * @param id
-    * @return
-    */
-  def getRef(id: Int): Option[ActorRef] = {
-    val actorRef = entities.get(id)
-    if (actorRef == None) {
-      log.debug("getRef({})", id)
-      val qir = Await.result(context.parent ? QueryID(id), Duration(5, TimeUnit.SECONDS))
-        .asInstanceOf[QueryIDResponse]
-      if (qir.actorRef == None) {
-        log.error("SimEntity with id {} does not exist!", id)
-        return None
-      } else {
-        entities.put(qir.id, qir.actorRef.get)
-        return qir.actorRef;
-      }
-    } else {
-      actorRef
-    }
-  }
 
   /**
     * Send local events
@@ -136,10 +73,13 @@ abstract class SimEntity(val name: String, val localID: Int)
     * @param data
     */
   def schedule(delay: Double, tag: Int, toS: String, data: Option[Any]): Unit = {
-    val thatId = entitiesNames.get(toS)
+//    val thatId = entitiesNames.get(toS)
+    val thatId = getId(toS)
+
     if (thatId == None) {
       //TODO use getRef() methods here
       log.error("Could not find id for actor name:{}", toS)
+      log.error(getLookInfo())
     } else {
       schedule(delay, tag, localID, thatId.get, data)
     }
@@ -155,18 +95,21 @@ abstract class SimEntity(val name: String, val localID: Int)
     * @param data
     */
   def schedule(delay: Double, tag: Int, fromS: String, toS: String, data: Option[Any]): Unit = {
-    val from = entitiesNames.get(fromS)
-    val to = entitiesNames.get(toS)
+
+    val from = getId(fromS)
+    val to = getId(toS)
     if (from == None || to == None) {
       //TODO use getRef() methods here
       log.error("Could not find id for on of actors : {}, {}", fromS, toS)
+      log.error(getLookInfo())
+
     } else {
       schedule(delay, tag, from.get, to.get, data)
     }
   }
 
   /**
-    * This method is called by all other variations,
+    * This method is called by all other variations.
     *
     * @param delay
     * @param tag
@@ -175,78 +118,122 @@ abstract class SimEntity(val name: String, val localID: Int)
     * @param data
     */
   def schedule(delay: Double, tag: Int, from: Int, to: Int, data: Option[Any]): Unit = {
-    assert(delay >= 0)
-    if (delay < 0 || !entities.contains(from) || !entities.contains(to)) {
-      log.error("negative delay {}, or ids are not defined from:{}, to:{}", delay, from, to)
-      return;
-    }
+    assert(delay >= 0 || contains(from) || contains(to))
+
     val nextTime = simTime + delay
 
     val ev = SimEv(nextTime, tag, from, to, data)
 
     /*Send the ev to the tmp destination SimEntity*/
     if (ev.to == localID) {
-      localEvents += ev
+      localEventQueue.enqueue(ev)
     } else {
       simOutChannels += ev
     }
-
   }
 
 
-  def handleEvent(ev: SimEvent)
+  def handleEvent(ev: SimEv)
+
+  def initEntity(data: Option[String])
 
 
-  def processEvent(ev: SimEv) = {
+  def updateStatistics(): Unit = {}
 
-    handleEvent(ev)
 
+  def sendOutOneEvent(ev: SimEv): Unit = {
+    val toRef = getRef(ev.to)
+    if (toRef != None)
+      toRef.get ! ev
+  }
+
+  private def sendOutEvents(time: Double, toId: Int, evs: Array[SimEv]): Unit = {
+    if (getRef(toId) == None) return
+
+    if (evs.nonEmpty)
+      evs.foreach(sendOutOneEvent(_))
+    else {
+      getRef(toId).get ! NullMessage(time + lookahead, localID, toId)
+    }
+  }
+
+
+  def canAdvance() = simInChannels.nonEmpty()
+
+
+  def getNextEvent(): SimEvent = {
+
+    val (minId, minEvent) = simInChannels.probNextEvent()
+    val result = if (localEventQueue.nonEmpty
+      && localEventQueue.head.time < minEvent.time) {
+      localEventQueue.dequeue()
+    } else {
+      simInChannels.extractNextEvent(minId)
+    }
+    result
   }
 
 
   def tick(): Unit = {
-    def sendOutEvent(time: Double, id: Int, evs: Array[SimEvent]): Unit = {
-      if (evs.isEmpty)
-        getRef(id).get ! NullMessage(time + lookahead, localID, id)
-      else
-        evs.foreach(getRef(id).get ! _)
+
+    var timeChanged = false
+
+    while (canAdvance) {
+
+      val simEvent = getNextEvent()
+      assert(simEvent.time >= simEvent.time)
+
+      if (simEvent.time > simTime) {
+        timeChanged = true
+        lastEventTime = simTime
+        simTime = simEvent.time
+        updateStatistics()
+      }
+
+      handleEvent(simEvent.asInstanceOf[SimEv])
     }
 
-    while (simChannels.canAdvance) {
-      val (id, ev) = simChannels.nextEvent()
-      simTime = ev.time
-      handleEvent(ev)
-
+    if (timeChanged) {
+      val outEvents = simOutChannels.flushAll()
+      //    outEvents.foreach( entry => sendOutEvent(entry._1, entry._2))
+      outEvents.map(kv => sendOutEvents(simTime, kv._1, kv._2))
     }
-
-
-    val outEvents = simOutChannels.flushAll()
-    //    outEvents.foreach( entry => sendOutEvent(entry._1, entry._2))
-    outEvents.map(v => sendOutEvent(simTime, v._1, v._2))
   }
 
-  override def receive: Receive = {
+  override def receive: Receive = LoggingReceive {
+
+    case POCK =>
+      log.debug(s"$name: got POCK from system")
+      sender ! PockBack(name, localID)
 
     case nm: NullMessage =>
-      simChannels.addNullMessage(nm)
+      log.debug(s"$name: $nm")
+      simInChannels.addEvent(nm)
       tick()
 
     case ev: SimEv =>
-      simChannels.addEvent(ev)
+      simInChannels.addEvent(ev)
       tick()
 
+    case ie: InitEntity =>
+      log.debug(s"$name : $ie")
+      initEntity(ie.data)
+
     //    case ev: SimEv =>
-    case AddLinkFrom(from, to) =>
-      assert(to == localID);
-      simChannels.addLink(from)
+    case alf: AddLinkFrom =>
+      log.debug(s"$name : $alf")
+      assert(alf.to == localID);
+      simInChannels.addLink(alf.from)
 
-    case AddLinkTo(from, to) =>
-      assert(from == localID);
-      simOutChannels.addLink(to)
+    case alt: AddLinkTo =>
+      log.debug(s"$name : $alt")
+      assert(alt.from == localID);
+      simOutChannels.addLink(alt.to)
 
-    case AddRef(name: String, id: Int, actorRef: ActorRef) =>
-      entities.put(id, actorRef)
-      entitiesNames.put(name, id)
+    case ar: AddRef =>
+      log.debug(s"$name : addRef $ar")
+      addRef(name, ar.id, ar.actorRef)
+      log.debug(s"$name: lookup info=$getLookInfo()")
 
     case SetLookahead(delay, value) =>
       scheduleLocal(delay, TAG_SET_LOOKAHEAD, Some(value))
@@ -255,6 +242,4 @@ abstract class SimEntity(val name: String, val localID: Int)
 
     case _ => log.info("Unknown Message")
   }
-
-
 }

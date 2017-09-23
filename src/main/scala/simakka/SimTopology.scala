@@ -6,16 +6,12 @@ import java.util.concurrent.atomic.AtomicInteger
   * Created by suhel on 6/10/16.
   */
 
-
 case class SimLink(from: String, to: String)
-
 
 case class SimEntityD(name: String, id: Int) {
 
-
   //  val id: Int = system.atomicID.incrementAndGet()
   //  system.addEntity(this)
-
 
   def linkTo(that: SimEntityD)(implicit system: SimTopology) = {
     system.addEntity(that)
@@ -39,12 +35,10 @@ case class SimEntityD(name: String, id: Int) {
   }
 
   def <-->(that: SimEntityD)(implicit system: SimTopology) = linkWith(that)(system)
-
 }
 
 class SimTopology {
   //  final val system = SimTopology
-
 
   final val system = this
   val atomicID = new AtomicInteger(1000)
@@ -88,7 +82,6 @@ class SimTopology {
       system.links += link
   }
 
-
   def enable(s: String) = {
     //TODO
     this
@@ -116,7 +109,9 @@ class SimTopology {
     s"entities:\n$entities \nlinks:\n$links"
   }
 
-  def runDSL() = {}
+  def runDSL() = {
+    //TODO include DSL code here
+  }
 }
 
 
@@ -130,6 +125,7 @@ object SimTopology {
 }
 
 class MySimApp extends SimTopology {
+  /* experimental dsl code */
   override def runDSL(): Unit = {
     implicit val system = this
 
@@ -140,15 +136,11 @@ class MySimApp extends SimTopology {
 
     "Rami" <--> "Suhel"
 
-    this += "amer"
-
+    this += "Amer"
 
     this += "Maryam"
 
     this enable "tracing" to "data/trace.txt"
     this enable "reports" to "data/report.txt"
-
   }
-
-
 }

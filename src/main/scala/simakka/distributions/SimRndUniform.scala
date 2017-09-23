@@ -42,5 +42,5 @@ class SimRndUniform(val name: String, lower: Double, upper: Double) extends SimR
     *
     * @return The generator's seed
     */
-  override def getSeed(): Unit = this.seed
+  override def getSeed() = this.seed
 }

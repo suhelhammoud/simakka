@@ -18,11 +18,12 @@ class SimChannel {
 
   /** Return the time of first event in queue, if queue is empty return the time of last received nullMessage */
   //  def nextLowestTime = if( isEmpty) lastNullMessageTime else front.time;
-  def nextLowestTime = if (!queue.isEmpty) front.time
-  else if (recentSourceTime > localChannelTime)
-    recentSourceTime
-  else SimEvNone.time;
-
+  def nextLowestTime = {
+    if (!queue.isEmpty) front.time
+    else if (recentSourceTime > localChannelTime)
+      recentSourceTime
+    else SimEvNone.time;
+  }
 
   def front: SimEvent = {
     if (empty) SimEvNone
