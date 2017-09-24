@@ -44,7 +44,7 @@ case class InitEntity(name: String, data: Option[String])
 case class CreateEntity(tp: String, name: String)
 
 case class RemoveEntity(data: Option[Any])
-case class Transfere(data: Option[Any])
+case class Transfer(data: Option[Any])
 
 /*  Lookup SimEntity names across the system */
 case class QueryID(id: Int)
